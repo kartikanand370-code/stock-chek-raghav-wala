@@ -255,9 +255,10 @@
     const visible = [...state.rows.values()].filter(active);
     if (visible.length) playMario();
     state.lastError = hadError ? errorMessage : '';
-    $('status').textContent = hadError
-      ? 'Checking stock...'
-      : (visible.length ? `✅ ${visible.length} product(s) in stock` : 'No qualifying stock found');
+    const signals = visible.flatMap(row => row.pincodes.map(pincode => `${row.key} ${row.name || `Product ${row.key}`} at ${pincode}`));
+    $('status').innerHTML = signals.length
+      ? signals.map(signal => `<div>${escapeHtml(signal)}</div>`).join('')
+      : 'Checking stock...';
     render();
   }
 
