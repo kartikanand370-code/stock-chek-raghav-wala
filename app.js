@@ -134,7 +134,7 @@
 
   function render() {
     const visible = [...state.rows.values()].filter(active).sort((a, b) => a.key.localeCompare(b.key));
-    $('results').innerHTML = visible.length ? visible.map(row => `<tr><td><b>${escapeHtml(row.key)}</b><small>${escapeHtml(row.name)}</small></td><td>${row.pincodes.map(escapeHtml).join(', ')}</td><td class="${row.offerCheck && row.offerDetected ? 'offer' : 'stock'}">${row.offerCheck && row.offerDetected ? 'STOCK WITH OFFER' : 'IN STOCK'}</td></tr>`).join('') : '<tr><td class="empty" colspan="3">No qualifying stock yet</td></tr>';
+    $('results').innerHTML = visible.length ? visible.map(row => `<tr><td><b>${escapeHtml(row.key)}</b></td><td>${row.pincodes.map(escapeHtml).join(', ')}</td><td class="${row.offerCheck && row.offerDetected ? 'offer' : 'stock'}">${row.offerCheck && row.offerDetected ? 'STOCK WITH OFFER' : 'IN STOCK'}</td></tr>`).join('') : '<tr><td class="empty" colspan="3">No qualifying stock yet</td></tr>';
     $('stockCount').textContent = visible.length;
     $('locationCount').textContent = visible.reduce((sum, row) => sum + row.pincodes.length, 0);
     const rowErrors = [...state.rows.values()].reduce((sum, row) => sum + (row.errors?.length || 0), 0);
@@ -234,8 +234,7 @@
       const results = await requestBatch(batch);
       if (!state.running) return;
       results.forEach(result => {
-        const row = state.rows.get(result.key) || { key: result.key, name: result.name, offerCheck: result.offerCheck, offerDetected: result.offerDetected, pincodes: [], errors: [] };
-        row.name = result.name || row.name || `Product ${result.productId}`;
+        const row = state.rows.get(result.key) || { key: result.key, offerCheck: result.offerCheck, offerDetected: result.offerDetected, pincodes: [], errors: [] };
         row.offerCheck = result.offerCheck === true;
         row.offerDetected = result.offerDetected === true;
         row.pincodes = row.pincodes.filter(pin => pin !== result.pincode);
@@ -251,11 +250,11 @@
       render();
     }
     if (!state.running) return;
-    if (hadError) startErrorAlarm(); else stopErrorAlarm();
+    stopErrorAlarm();
     const visible = [...state.rows.values()].filter(active);
-    if (visible.length) playMario();
+    if (visible.length && !hadError) playMario();
     state.lastError = hadError ? errorMessage : '';
-    const signals = visible.flatMap(row => row.pincodes.map(pincode => `${row.key} ${row.name || `Product ${row.key}`} at ${pincode}`));
+    const signals = visible.flatMap(row => row.pincodes.map(pincode => `${row.key} at ${pincode}`));
     $('status').innerHTML = signals.length
       ? signals.map(signal => `<div>${escapeHtml(signal)}</div>`).join('')
       : 'Checking stock...';
@@ -275,7 +274,7 @@
           state.requestErrors += 1;
           state.lastError = error.message;
           $('status').textContent = error.retryable ? 'Checking stock...' : `❌ ${error.message}`;
-          startErrorAlarm(); render();
+          stopErrorAlarm(); render();
           if (!error.retryable) { state.running = false; break; }
         }
         if (state.running) await waitForNextScan(Math.max(1, Number($('interval').value) || 1) * 1000);
