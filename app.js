@@ -1,12 +1,26 @@
 (() => {
   const MAX_PRODUCTS = 50;
   const PARALLEL = 10;
+  const BATCH_TIMEOUT_MS = 8000;
   const DEVICE_KEY = 'croma_stock_signal_device_id_v1';
   const SETTINGS_KEY = 'croma_stock_signal_settings_v1';
   const RESULTS_KEY = 'croma_stock_signal_results_v1';
   const state = { running: false, timer: null, wake: null, licenseTimer: null, rows: new Map(), muted: false, errorTimer: null, audioContext: null, deviceId: '', licensed: false, requestErrors: 0, lastError: '' };
   const $ = id => document.getElementById(id);
   const mario = $('mario');
+
+  function ensureProgressUi() {
+    if (!$('progressText')) {
+      const progressText = document.createElement('div');
+      progressText.id = 'progressText';
+      progressText.className = 'progress-text';
+      progressText.textContent = 'Ready';
+      $('status').after(progressText);
+    }
+    const style = document.createElement('style');
+    style.textContent = '.progress-text{margin-top:6px;color:#666;font-size:12px;line-height:1.2}.chips{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}.chip{width:100%;min-width:0;justify-content:space-between;padding:7px 8px;font-size:14px;gap:4px}.chip span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}';
+    document.head.appendChild(style);
+  }
 
   function getDeviceId() {
     try {
@@ -86,6 +100,20 @@
     $('pinCount').textContent = `${pinCodes($('pincodes').value).length} pincodes`;
     $('parallelCount').textContent = productKeys($('products').value).length * pinCodes($('pincodes').value).length;
     renderChips();
+  }
+
+  function updateProgress(completed, total) {
+    $('progressText').textContent = `Checking ${completed}/${total} checks · ${total} parallel checks`;
+    $('progressBar').style.width = total ? `${completed / total * 100}%` : '0%';
+  }
+
+  function renderSignals() {
+    const visible = [...state.rows.values()].filter(active).sort((a, b) => a.key.localeCompare(b.key));
+    const signals = visible.flatMap(row => row.pincodes.map(pincode => `${row.key} at ${pincode}`));
+    $('status').innerHTML = signals.length
+      ? signals.map(signal => `<div>${escapeHtml(signal)}</div>`).join('')
+      : 'Checking stock...';
+    return visible;
   }
 
   function setNetwork(kind, label) {
@@ -191,8 +219,23 @@
   async function requestBatch(jobs) {
     const options = { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ jobs, category: $('category').value.trim() || 'mobile', deviceId: state.deviceId }) };
     const fetchPath = async path => {
-      try { return await fetch(path, options); }
-      catch (error) { error.retryable = true; setNetwork('offline', '✕ Network disconnected'); throw error; }
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), BATCH_TIMEOUT_MS);
+      try {
+        return await fetch(path, { ...options, signal: controller.signal });
+      } catch (error) {
+        if (error.name === 'AbortError') {
+          const timeoutError = new Error(`Stock request timed out after ${BATCH_TIMEOUT_MS / 1000}s.`);
+          timeoutError.retryable = true;
+          setNetwork('error', '⚠ Croma API timeout');
+          throw timeoutError;
+        }
+        error.retryable = true;
+        setNetwork('offline', '✕ Network disconnected');
+        throw error;
+      } finally {
+        clearTimeout(timeout);
+      }
     };
     let response = await fetchPath('/api/stock');
     if (response.status === 404) response = await fetchPath('/API/stock');
@@ -229,10 +272,20 @@
     let completed = 0;
     let hadError = false;
     let errorMessage = '';
+    $('status').textContent = 'Checking stock...';
+    updateProgress(0, jobs.length);
     for (let start = 0; start < jobs.length; start += PARALLEL) {
       const batch = jobs.slice(start, start + PARALLEL);
-      const results = await requestBatch(batch);
-      if (!state.running) return;
+      let results = [];
+      try {
+        results = await requestBatch(batch);
+      } catch (error) {
+        if (!state.running) return;
+        hadError = true;
+        state.requestErrors += 1;
+        errorMessage ||= error.message;
+        state.lastError = error.message;
+      }
       results.forEach(result => {
         const row = state.rows.get(result.key) || { key: result.key, offerCheck: result.offerCheck, offerDetected: result.offerDetected, pincodes: [], errors: [] };
         row.offerCheck = result.offerCheck === true;
@@ -245,19 +298,15 @@
         state.rows.set(result.key, row);
       });
       completed += batch.length;
-      $('progressBar').style.width = `${completed / jobs.length * 100}%`;
-      $('status').textContent = `Checking ${completed}/${jobs.length} checks · ${jobs.length} parallel checks`;
+      updateProgress(completed, jobs.length);
+      renderSignals();
       render();
     }
     if (!state.running) return;
     stopErrorAlarm();
-    const visible = [...state.rows.values()].filter(active);
+    const visible = renderSignals();
     if (visible.length && !hadError) playMario();
     state.lastError = hadError ? errorMessage : '';
-    const signals = visible.flatMap(row => row.pincodes.map(pincode => `${row.key} at ${pincode}`));
-    $('status').innerHTML = signals.length
-      ? signals.map(signal => `<div>${escapeHtml(signal)}</div>`).join('')
-      : 'Checking stock...';
     render();
   }
 
@@ -333,6 +382,7 @@
   let deferredPrompt;
   window.addEventListener('beforeinstallprompt', event => { event.preventDefault(); deferredPrompt = event; $('installBtn').style.display = 'block'; });
   $('installBtn').addEventListener('click', async () => { if (!deferredPrompt) return; deferredPrompt.prompt(); await deferredPrompt.userChoice; deferredPrompt = null; $('installBtn').style.display = 'none'; });
+  ensureProgressUi();
   state.deviceId = getDeviceId();
   $('deviceId').textContent = state.deviceId;
   setNetwork(navigator.onLine ? 'online' : 'offline', navigator.onLine ? '● Network connected' : '✕ Network disconnected');
