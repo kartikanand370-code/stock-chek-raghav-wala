@@ -18,7 +18,13 @@
       $('status').after(progressText);
     }
     const style = document.createElement('style');
-    style.textContent = '.progress-text{margin-top:6px;color:#666;font-size:12px;line-height:1.2}.chips{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}.chip{width:100%;min-width:0;justify-content:space-between;padding:7px 5px;font-size:13px;gap:2px;overflow:visible}.chip span{min-width:0;flex:0 0 auto;overflow:visible;text-overflow:clip;white-space:nowrap}.chip button{flex:0 0 auto;font-size:18px}';
+    style.textContent = '.progress-text{margin-top:6px;color:#666;font-size:12px;line-height:1.2}.chips{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}.chip{width:100%;min-width:0;justify-content:space-between;padding:7px 5px;font-size:13px;gap:2px;overflow:visible}.chip span{min-width:0;flex:0 0 auto;overflow:visible;text-overflow:clip;white-space:nowrap}.chip button{flex:0 0 auto;font-size:18px}.product-coupon{display:block;width:100%;margin-top:9px}#mute{grid-column:1/-1}';
+    const productEntryRow = $('addProduct')?.closest('.entry-row');
+    const coupon = $('coupon');
+    if (productEntryRow && coupon) {
+      coupon.classList.add('product-coupon');
+      productEntryRow.after(coupon);
+    }
     document.head.appendChild(style);
   }
 
