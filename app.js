@@ -18,7 +18,7 @@
       $('status').after(progressText);
     }
     const style = document.createElement('style');
-    style.textContent = '.progress-text{margin-top:6px;color:#666;font-size:12px;line-height:1.2}.chips{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}.chip{width:100%;min-width:0;justify-content:space-between;padding:7px 8px;font-size:14px;gap:4px}.chip span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}';
+    style.textContent = '.progress-text{margin-top:6px;color:#666;font-size:12px;line-height:1.2}.chips{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}.chip{width:100%;min-width:0;justify-content:space-between;padding:7px 5px;font-size:13px;gap:2px;overflow:visible}.chip span{min-width:0;flex:0 0 auto;overflow:visible;text-overflow:clip;white-space:nowrap}.chip button{flex:0 0 auto;font-size:18px}';
     document.head.appendChild(style);
   }
 
@@ -272,7 +272,7 @@
     let completed = 0;
     let hadError = false;
     let errorMessage = '';
-    $('status').textContent = 'Checking stock...';
+    if (![...state.rows.values()].some(active)) $('status').textContent = 'Checking stock...';
     updateProgress(0, jobs.length);
     for (let start = 0; start < jobs.length; start += PARALLEL) {
       const batch = jobs.slice(start, start + PARALLEL);
@@ -322,7 +322,7 @@
           if (!state.running) break;
           state.requestErrors += 1;
           state.lastError = error.message;
-          $('status').textContent = error.retryable ? 'Checking stock...' : `❌ ${error.message}`;
+          renderSignals();
           stopErrorAlarm(); render();
           if (!error.retryable) { state.running = false; break; }
         }
