@@ -1,6 +1,6 @@
 (() => {
   const MAX_PRODUCTS = 50;
-  const PARALLEL = 100;
+  const PARALLEL = 50;
   const BATCH_TIMEOUT_MS = 8000;
   const DEVICE_KEY = 'croma_stock_signal_device_id_v1';
   const SETTINGS_KEY = 'croma_stock_signal_settings_v1';
